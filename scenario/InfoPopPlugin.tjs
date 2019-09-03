@@ -1,0 +1,168 @@
+/*-----------------------------------------------------------------------------/
+/	Copyright (C) TYPE-MOON All Rights Reserved.
+/		インフォメーション表示
+/-----------------------------------------------------------------------------*/
+if(typeof global.infopop_object == "undefined")
+{
+
+class InfoPopLayer extends KAGLayer
+{
+	var	msgfunc;
+
+	var	bgcolor	= 0xFF0080FF;
+	var	color	= 0xFFFFFF;
+
+	var	linespacing	= 2;
+	var	margin		= 4;
+
+	var	lastmsg;
+
+	function InfoPopLayer(win, par)
+	{
+		super.KAGLayer(...);
+		font.height	= 16;
+
+		lastmsg	= "";
+
+		//	表示
+		absolute	= 100000000;
+		hitThreshold= 256;
+		visible		= true;
+	}
+
+	function finalize()
+	{
+		super.finalize(...);
+	}
+
+	//	中身の書き直し
+	function update()
+	{
+		//	表示メッセージ
+		var	msg;
+		if(msgfunc == void)
+			return;
+		if(typeof msgfunc == "String")
+			msg	= Scripts.eval(msgfunc);
+		else
+			msg	= msgfunc();
+
+		//	表示内容が変更されたか？
+		if(lastmsg == msg)
+			return;
+		lastmsg	= msg;
+
+		//	サイズ
+		var	lines	= msg.split("\n");
+		var	mw, mh;
+		for(var i=0; i<lines.count; i++)
+		{
+			var	fw	= font.getTextWidth(lines[i]);
+			var	fh	= font.getTextHeight(lines[i]);
+			mw	= fw if(fw > mw);
+			mh	+= fh + linespacing;
+		}
+		mw	+= margin * 2;
+		mh	+= margin * 2 - linespacing;
+		setImageSize(mw, mh);
+		setSizeToImageSize();
+
+		//	描画
+		fillRect(0, 0, width, height, bgcolor);
+		var	l	= margin, t	= margin;
+		for(var i=0; i<lines.count; i++)
+		{
+			drawText(l, t, lines[i], color,, false);
+			t	+= font.getTextHeight(lines[i]) + linespacing;
+		}
+	}
+
+	function hide()
+	{
+		invalidate this;
+	}
+}
+
+class InfoPopPlugin extends KAGPlugin
+{
+	var	infopops	= [];
+	var	timer;
+
+	function InfoPopPlugin(window)
+	{
+		super.KAGPlugin();
+		timer = new Timer(onTimeout, "");
+		timer.interval	= 300;
+	}
+
+	function finalize()
+	{
+		hide();
+		release(timer);
+		super.finalize(...);
+	}
+
+	//	表示
+	function show(msgfunc, l=8, t=8)
+	{
+		infopops[0]	= new InfoPopLayer(kag, kag.fore.base) if(infopops[0] == void);
+		infopops[1]	= new InfoPopLayer(kag, kag.back.base) if(infopops[1] == void);
+		infopops[0].setPos(l, t);
+		infopops[1].setPos(l, t);
+		infopops[0].msgfunc	= msgfunc;
+		infopops[1].msgfunc	= msgfunc;
+		infopops[0].update();
+		infopops[1].update();
+
+		timer.enabled	= true;
+	}
+
+	//	消去
+	function hide()
+	{
+		infopops[0].hide() if(infopops[0] != void);
+		infopops[1].hide() if(infopops[1] != void);
+		infopops[0] = infopops[1] = void;
+
+		timer.enabled	= false;
+	}
+
+	function onTimeout()
+	{
+		infopops[0].update() if(infopops[0] != void);
+		infopops[1].update() if(infopops[1] != void);
+	}
+
+	function onStore(f, elm)
+	{
+		// 栞を保存する際に呼ばれる
+		// f = 保存先の栞データ ( Dictionary クラスのオブジェクト )
+		// elm = tempsave 時のオプション ( 現在は常に void )
+	}
+
+	function onRestore(f, clear, elm)
+	{
+		// 栞を読み出すときに呼ばれる
+		// f = 読み込む栞データ ( Dictionary クラスのオブジェクト )
+		// clear = メッセージレイヤをクリアするか ( tempload の時のみ false )
+		// elm = tempload 時のオプション ( tempload でない場合は 常に void,
+		//                                 tempload の時は Dictionary クラスのオブジェクト )
+	}
+}
+
+// プラグインオブジェクトを作成し、登録する
+kag.addPlugin(global.infopop_object = new InfoPopPlugin());
+
+kag.tagHandlers.showinfo	= function(elm)
+{
+	infopop_object.show(elm.func);
+	return 0;
+} incontextof kag;
+
+kag.tagHandlers.hideinfo	= function(elm)
+{
+	infopop_object.hide();
+	return 0;
+} incontextof kag;
+
+}

@@ -1,0 +1,28 @@
+﻿// startup.tjs - スタートアップスクリプト
+// Copyright (C) 2001, W.Dee  改変・配布は自由です
+@set(DEBUG=0)
+@set(SELECTVOICESPEED=0)
+
+//	スクリプトツールで定義されるが、本体では定義しないので安全のためににここで定義
+var RootDirectory	= "";
+
+@if(DEBUG)
+Debug.console.visible	= true;
+@endif
+
+@if(DEBUG)
+if(System.getArgument("-snrdiff") !== void)			Scripts.execStorage("debug/ScenarioDiff.tjs");
+else if(System.getArgument("-fgcopy") !== void)		Scripts.execStorage("debug/FGCopy.tjs");
+else if(System.getArgument("-crtroute") !== void)	Scripts.execStorage("debug/CreateRoute.tjs");
+else if(System.getArgument("-setvoice") !== void)	Scripts.execStorage("debug/setvoice.tjs");
+else if(System.getArgument("-rflctps2") !== void)	Scripts.execStorage("debug/ReflectPS2.tjs");
+else if(System.getArgument("-cnvvoice") !== void)	Scripts.execStorage("debug/ConvertVoice.tjs");
+else if(System.getArgument("-chkscrpt") !== void)	Scripts.execStorage("debug/checkscript.tjs");
+//else if(System.getArgument("") !== void)	Scripts.execStorage("debug/");
+else
+@endif
+
+// このスクリプトは一番最初に実行されるスクリプトです
+{
+	Scripts.execStorage("system/Initialize.tjs"); // system/Initialize.tjs を実行
+}

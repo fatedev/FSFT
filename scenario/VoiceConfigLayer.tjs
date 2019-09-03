@@ -1,0 +1,282 @@
+/*-----------------------------------------------------------------------------
+/	Copyright (C) TYPE-MOON All Rights Reserved.
+/		ボイス設定レイヤー
+/----------------------------------------------------------------------------*/
+@if(__VOICECONFIGLAYER_DEFINED__==0)
+@set(__VOICECONFIGLAYER_DEFINED__=1)
+
+@set(VIEW_ALL_CHARACTER_VOICE=0)
+
+var	voiceVolumeUnit	= 5;
+
+var	vcl;
+class VoiceConfigLayer extends FadeLayer
+{
+	var	tmplayer;
+	var	cvclayers	= [];
+	var	scrollbar;
+	var	okbutton, cancelbutton;
+
+	var	cvctop		= 78, cvcbottom;
+	var	cvcmargin	= 4;
+
+	var	voiceSetting;
+
+	function VoiceConfigLayer(win, par)
+	{
+		vcl	= this;
+		super.FadeLayer(...);
+		name	= "ボイス設定";
+		setPos(0, 0);
+		setSize(win.scWidth, win.scHeight);
+		fillRect(0, 0, width, height, 0xb0000000);
+		hitThreshold	= 0;
+
+		tmplayer	= new global.Layer(win, this);
+
+@if(VIEW_ALL_CHARACTER_VOICE)
+		sf.prespeech	= [];
+		var	keys	= [];
+		keys.assign(voiceVolumeTargets);
+		for(var i=0; i<keys.count; i+=2)
+		{
+			sf.prespeech.add(keys[i]);
+			sf.voiceSetting[keys[i]]	= [ 100, true ];
+		}
+@endif
+		voiceSetting = %[];
+		(Dictionary.assignStruct incontextof voiceSetting)(sf.voiceSetting);
+		var	pos	= 0;
+		for(var i=0; i<sf.prespeech.count; i++)
+		{
+			var	cvc	= new CharacterVoiceConfigLayer(win, this, sf.prespeech[i]);
+			cvclayers.add(cvc);
+			cvc.pos	= pos;
+			pos	+= cvc.height + cvcmargin;
+		}
+		var	cvc	= new CharacterVoiceConfigLayer(win, this, "others");
+		cvclayers.add(cvc);
+		cvc.pos	= pos;
+
+		var	scrimgs	= [	//	base
+			"voicescroll_basetop",
+			"voicescroll_base",
+			"voicescroll_basebottom",
+			"voicescroll_slidertop",
+			"voicescroll_slider",
+			"voicescroll_sliderbottom"
+		];
+		with(scrollbar = new ScrollBarLayer(win, this, 6 * (cvclayers[0].height + cvcmargin) - cvcmargin, 6, 6,, scrimgs))
+		{
+			.setPos(608, cvctop);
+			.total		= cvclayers.count * (cvclayers[0].height + cvcmargin) - cvcmargin;
+			.area		= .height;
+			.onscroll	= onScroll;
+			.current	= 0;
+			.moving		= (cvclayers[0].height + cvcmargin) * 0.5;
+			cvcbottom	= .top + .height;
+		}
+
+		with(okbutton = new ExButtonLayer(win, this, "ok", 660, 500, "conf_ok", "ボイス設定を保存して終了します"))
+		{
+			.mode		= 3;
+			.focusable	= true;
+			.visible	= true;
+			.opacity	= 255;
+		}
+		with(cancelbutton = new ExButtonLayer(win, this, "cancel", 660, 544, "conf_cancel", "ボイス設定を変更せずに終了します"))
+		{
+			.mode		= 3;
+			.focusable	= true;
+			.visible	= true;
+			.opacity	= 255;
+		}
+
+		win.org_onMouseWheel= win.onMouseWheel;
+		win.onMouseWheel	= scrollbar.onMouseWheel;
+
+		onScroll();
+	}
+
+	function finalize()
+	{
+		window.onMouseWheel	= window.org_onMouseWheel;
+		invalidate tmplayer if tmplayer != void;
+		for(var i=0; i<cvclayers.count; i++)
+			invalidate cvclayers[i] if cvclayers[i] != void;
+		invalidate cvclayers;
+		invalidate scrollbar if scrollbar != void;
+		super.finalize();
+	}
+
+	var	showed;
+	function show()
+	{
+		if(!showed)
+		{
+			showed	= true;
+			super.show(...);
+			setMode();
+		}
+	}
+
+	function hide(time, accel)
+	{
+		if(showed)
+		{
+			showed	= false;
+			removeMode();
+
+			//	ボイス設定ボタンにフォーカスをあわせる
+			var it = parent.items;
+			var i=0;
+			while(i<it.count && it[i].id!="changeVoice")	i++;
+			it[i].focus() if i<it.count;
+
+			super.hide(time, accel, onClosed);
+		}
+	}
+
+	function onClosed()
+	{
+		invalidate this;
+	}
+
+	function onMouseDown(x, y, button, shift)
+	{
+		if(button == mbRight)
+			hide();	//	キャンセル
+	}
+
+	function onScroll()
+	{
+		var	t	= cvctop - scrollbar.current;
+		for(var i=0; i<cvclayers.count; i++)
+			cvclayers[i].top	= t + cvclayers[i].pos;
+	}
+
+	function appear(cvc)
+	{
+		if(cvc.top < cvctop)
+			scrollbar.current	= cvc.pos;
+		else if(cvc.top + cvc.height > cvcbottom)
+			scrollbar.current	= cvc.pos - (cvcbottom - cvctop - cvc.height - cvcmargin);
+	}
+
+	function onButtonDown(btn)
+	{
+		switch(btn.id)
+		{
+		case "ok":
+			(Dictionary.assignStruct incontextof sf.voiceSetting)(voiceSetting);	//	反映
+			playSound(okSE);
+			hide();
+			break;
+
+		case "cancel":
+			playSound(cancelSE);
+			hide();
+			break;
+		}
+	}
+}
+
+class CharacterVoiceConfigLayer extends FadeLayer
+{
+	var	faceButton;
+	var	volumeSlider;
+	var	chara;
+
+	function CharacterVoiceConfigLayer(win, par, chara)
+	{
+		super.FadeLayer(...);
+		name		= "ボイス設定: "+chara;
+		this.chara	= chara;
+		left		= 32;
+		hitThreshold= 64;
+		loadImages("voicewindow");
+		setSizeToImageSize();
+		with(par.tmplayer)
+		{
+			.loadImages("voicename_"+chara);
+			operateRect(113, 18, par.tmplayer, 0, 0, .imageWidth, .imageHeight);
+		}
+
+		with(faceButton = new ExButtonLayer(win, this, chara+"_face", 32, 12, "voiceicon_"+chara,
+			chara+" のボイス再生をON/OFFします"))
+		{
+			.mode	= 1;	//	ON/OFF切り替え
+			.on() if !sf.voiceSetting[chara][1];
+			.onFocus	= function
+			{
+				parent.appear();
+				global.ExButtonLayer.onFocus(...);
+//				setCursorPos(left+width\2, top+height\2);
+			} incontextof faceButton;
+			.focusable	= true;
+			.visible	= true;
+			.opacity	= 255;
+		}
+
+		with(volumeSlider = new SliderLayer(win, this, chara+"_volume", 281, 29, "slider",
+			chara+" のボイス音量を変更します", 211, 100 \ voiceVolumeUnit))
+		{
+			.onFocus	= function
+			{
+				parent.appear();
+				global.SliderLayer.onFocus(...);
+//				setCursorPos(left+width\2, top+height\2);
+			} incontextof volumeSlider;
+			.value	= sf.voiceSetting[chara][0] \ voiceVolumeUnit;
+			.readyVisible();
+		}
+
+		opacity	= 255;
+		visible	= true;
+	}
+
+	function finalize()
+	{
+		invalidate faceButton if faceButton != void;
+		invalidate volumeSlider if volumeSlider != void;
+		super.finalize();
+	}
+
+	function onMouseDown(x, y, button, shift)
+	{
+		if(button == mbLeft)
+		{
+			if(x >= 281 && y >= 31 && x < 491 && y < 46)
+				volumeSlider.pos	= x - 281 - volumeSlider.width \ 2;
+		}
+		else if(button == mbRight)
+			parent.hide();
+	}
+
+	function onChangeValue(slider, value)
+	{
+//		dm("onChangeValue("+slider.id, value+")");
+		parent.voiceSetting[chara][0]	= int(value * voiceVolumeUnit);
+	}
+
+	function onButtonDown(btn)
+	{
+//		dm("onButtonDown("+btn.id+")");
+		if(btn.id == chara+"_face")
+			parent.voiceSetting[chara][1]	= false;
+	}
+
+	function onButtonUp(btn)
+	{
+//		dm("onButtonUp("+btn.id+")");
+		if(btn.id == chara+"_face")
+			parent.voiceSetting[chara][1]	= true;
+	}
+
+	function appear()
+	{
+		parent.appear(this);
+	}
+}
+
+@endif

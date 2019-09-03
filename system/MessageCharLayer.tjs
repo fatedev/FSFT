@@ -1,0 +1,304 @@
+// MessageCharLayer - ActingMessageLayer に表示される文字を描画するレイヤー
+
+class MessageCharLayer extends KAGLayer // 演出を行なうなら、AffineLayer などに変更のこと
+{
+	var	ea	= 4;	//	縁取り部分のサイズ
+
+	var	drawed;		//	描画されたか
+
+	var	pitch;		//	前の文字との字間
+
+	var	textWidth, textHeight;
+
+@if(DEBUG!=1)
+	var	clearcolor	= 0x00000000;
+@endif
+@if(DEBUG==1)
+	var	clearcolor	= 0x10FFFF00;
+@endif
+
+	function MessageCharLayer(win, par)
+	{
+		super.Layer(...);
+//		drawed			= true;
+		hitThreshold	= 256;
+	}
+
+	function finalize()
+	{
+		super.finalize();
+	}
+
+	function assignImages(src)
+	{
+		super.assignImages(...);
+
+		with(src)
+		{
+			name		= .name;
+			ea			= .ea;
+			drawed		= .drawed;
+			pitch		= .pitch;
+			textWidth	= .textWidth;
+			textHeight	= .textHeight;
+			with(.font)
+			{
+				font.face	= .face;
+				font.angle	= .angle;
+				font.bold	= .bold;
+				font.italic	= .italic;
+				font.height	= .height;
+			}
+		}
+	}
+
+	function setFont(face, angle, bold, italic, size)
+	{
+		with(font)
+		{
+			.face	= (angle == 2700 ? "@" : "") +face;
+			.angle	= angle;
+			.bold	= bold;
+			.italic	= italic;
+			.height	= - size;
+		}
+	}
+
+	//	縁取りなどを無視した、テキストのみの左上座標
+	property textLeft
+	{
+		setter(v)	{ left = v - ea; }
+		getter		{ return left + ea; }
+	}
+
+	property textTop
+	{
+		setter(v)	{ top = v - ea; }
+		getter		{ return top + ea; }
+	}
+
+	function setTextPos(l, t)
+	{
+		setPos(l - ea, t - ea);
+	}
+
+	function resize(w, h)
+	{
+		textWidth	= w;
+		textHeight	= h;
+		w	+= (ea << 1);
+		h	+= (ea << 1);
+		if(imageWidth != w || imageHeight != h)
+		{
+			setImageSize(w, h);
+			setSizeToImageSize();
+			drawed	= true;
+		}
+		clear();
+	}
+
+	function clear()
+	{
+		fillRect(0, 0, imageWidth, imageHeight, clearcolor) if drawed;
+		drawed	= false;
+	}
+
+	function resizeByText(ch, vert, max, min)
+	{
+		var	w = font.getTextWidth(ch), h = font.getTextHeight(ch);
+		var	ret = 0;
+		if(ch.length == 1)
+			;	// 1文字なら関係ない
+		else if(vert != void)
+		{
+			if(h > max)
+			{
+				// 文字の重なりが小さそうなら、均等割付する
+				if(((h - max) / (ch.length - 1)) < 4)
+					ret	= -2;	//	均等割付
+				else
+					ret	= 2;	//	縮小描画
+				h = max;
+			}
+			else if(h < min)
+				h = min, ret = -2;	//	均等割付
+		}
+		else if(vert !== void)
+		{
+			if(w > max)
+			{
+				// 文字の重なりが小さそうなら、均等割付する
+				if(((w - max) / (ch.length - 1)) < 4)
+					ret	= -2;	//	均等割付
+				else
+					ret	= 2;	//	縮小描画
+				w = max;
+			}
+			else if(w < min)
+				w = min, ret = -1;	//	均等割付
+		}
+		resize(w, h);
+		return ret;
+	}
+
+	//	縮小描画
+	function drawMinimize(vert, ch, color, aa, sl, sc, sw, sox, soy)
+	{
+//		dm("draw minimize: "+ch);
+		var	tmp	= window.temporaryLayer;
+		with(window.temporaryLayer)
+		{
+			var	w, h;
+			.face	= dfAlpha;
+			.type	= ltAlpha;
+			with(.font)
+			{
+				.face	= font.face;
+				.angle	= font.angle;
+				.bold	= font.bold;
+				.italic	= font.italic;
+				.height	= font.height;
+				w	= .getTextWidth(ch);
+				h	= .getTextHeight(ch);
+			}
+			.setImageSize(w + (ea << 1), h + (ea << 1));
+			.fillRect(0, 0, .imageWidth, .imageHeight, clearcolor);
+			.drawText(ea, ea, ch, color, 255, aa, sl, sc, sw, sox, soy);
+			stretchCopy(0, 0, width, height, window.temporaryLayer, 0, 0, .imageWidth, .imageHeight);
+		}
+	}
+
+	//	均等割付
+	function equableLayout(vert, ch, color, aa, sl, sc, sw, sox, soy)
+	{
+//		dm("equable layout: "+ch+", "+vert);
+		var	tmp	= window.temporaryLayer;
+		var	spc, step;
+		with(window.temporaryLayer)
+		{
+			var	w, h;
+			.face	= dfAlpha;
+			.type	= ltAlpha;
+			with(.font)
+			{
+				.face	= font.face;
+				.angle	= font.angle;
+				.bold	= font.bold;
+				.italic	= font.italic;
+				.height	= font.height;
+				w	= .getTextWidth(ch);
+				h	= .getTextHeight(ch);
+			}
+			if(vert)
+			{
+				.setImageSize(.font.getTextWidth(ch[0]) + (ea << 1), int(.font.getTextHeight(ch[0]) * 1.5) + (ea << 1));
+				spc = step = (textHeight - h) / (ch.length - 1);
+			}
+			else
+			{
+				.setImageSize(int(.font.getTextWidth(ch[0]) * 1.5) + (ea << 1), .font.getTextHeight(ch[0]) + (ea << 1));
+				spc = step = (textWidth - w) / (ch.length - 1);
+			}
+			var	l = 0, t = 0;
+			for(var i=0; i<ch.length; i++)
+			{
+//				dm(ch[i]+": "+l+", "+t+", "+spc+", "+step);
+				.fillRect(0, 0, .imageWidth, .imageHeight, 0x00000000);
+				.drawText(ea, ea, ch[i], color, 255, aa, sl, sc, sw, sox, soy);
+				operateRect(l, t, window.temporaryLayer, 0, 0, .imageWidth, .imageHeight);
+				if(vert)
+					t	+= .font.getTextHeight(ch[i]) + int(spc);
+				else
+					l	+= .font.getTextWidth(ch[i]) + int(spc);
+				spc	+= step - int(spc);
+			}
+		}
+	}
+
+	function drawText(ch, color, aa, vert, max, min)
+	{
+		var	ret	= resizeByText(ch, vert, max, min);
+		if(ret > 0)
+			drawMinimize(vert, ch, color, aa);	//	縮小描画
+		else if(ret < 0)
+			equableLayout(vert, ch, color, aa);	//	均等割付
+		else
+			super.drawText(ea, ea, ch, color, 255, aa);
+		drawed	= true;
+	}
+
+	function drawTextWithShadow(ch, color, aa, shadowcolor, shadowoffsetx, shadowoffsety, vert, max, min)
+	{
+		var	ret	= resizeByText(ch, vert, max, min);
+		if(ret > 0)
+			drawMinimize(vert, ch, color, aa, shadowcolor, 0, shadowoffsetx, shadowoffsety);
+		else if(ret < 0)
+			equableLayout(vert, ch, color, aa, shadowcolor, 0, shadowoffsetx, shadowoffsety);
+		else
+			super.drawText(ea, ea, ch, color, 255, aa, 255, shadowcolor, 0, shadowoffsetx, shadowoffsety);
+		drawed	= true;
+	}
+
+	function drawTextWithEdge(ch, color, aa, edgeemphasis, edgecolor, edgeextent, vert, max, min)
+	{
+		var	ret	= resizeByText(ch, vert, max, min);
+		if(ret > 0)
+			drawMinimize(vert, ch, color, aa, edgeemphasis, edgecolor, edgeextent, 0, 0);
+		else if(ret < 0)
+			equableLayout(vert, ch, color, aa, edgeemphasis, edgecolor, edgeextent, 0, 0);
+		else
+			super.drawText(ea, ea, ch, color, 255, aa, edgeemphasis, edgecolor, edgeextent, 0, 0);
+		drawed	= true;
+	}
+
+	function drawGraph(layer, color=void, withresize=true)
+	{
+		var	iw = layer.imageWidth, ih = layer.imageHeight;
+		resize(iw, ih) if withresize;
+		if(color !== void)
+		{
+			layer.face	= dfOpaque;
+			layer.holdAlpha	= true;
+			layer.fillRect(0, 0, iw, ih, color);
+		}
+		operateRect(ea, ea, layer, 0, 0, iw, ih);
+		drawed	= true;
+	}
+
+	function drawGraphWithShadow(layer, color, shadowcolor, shadowoffsetx, shadowoffsety)
+	{
+		var	iw = layer.imageWidth, ih = layer.imageHeight;
+		resize(iw, ih);
+		layer.face	= dfOpaque;
+		layer.holdAlpha	= true;
+		layer.fillRect(0, 0, iw, ih, shadowcolor);
+		operateRect(ea + shadowoffsetx, ea + shadowoffsety, layer, 0, 0, iw, ih);
+
+		drawGraph(layer, false);
+		drawed	= true;
+	}
+
+	function drawGraphWithEdge(layer, color, edgeemphasis, edgecolor, edgeextent)
+	{
+		var	iw = layer.imageWidth, ih = layer.imageHeight;
+		resize(iw, ih);
+		layer.face	= dfOpaque;
+		layer.holdAlpha	= true;
+		layer.fillRect(0, 0, iw, ih, edgecolor);
+
+		var	tmp	= new global.Layer(window, this);
+		tmp.setImageSize(iw + edgeextent * 2, ih + edgeextent * 2);
+		tmp.fillRect(0, 0, tmp.imageWidth, tmp.imageHeight, 0x00000000);
+		tmp.operateRect(edgeextent, edgeextent, layer, 0, 0, iw, ih);
+		tmp.doBoxBlur(edgeextent, edgeextent);
+
+		var	cnt	= int(edgeemphasis / 256);
+		for(var i=0; i<cnt; i++)
+			operateRect(ea - edgeextent, ea - edgeextent, tmp, 0, 0, tmp.imageWidth, tmp.imageHeight);
+		operateRect(ea - edgeextent, ea - edgeextent, tmp, 0, 0, tmp.imageWidth, tmp.imageHeight,, edgeemphasis - cnt * 256);
+		invalidate tmp;
+
+		drawGraph(layer, color, false);
+		drawed	= true;
+	}
+}
